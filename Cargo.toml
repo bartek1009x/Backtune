@@ -1,0 +1,12 @@
+[package]
+name = "Backtune"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+directories = "5"
+sdl2 = "0.38.0"
+
+[[bin]]
+name = "Backtune"
+path = "src/main.rs"
