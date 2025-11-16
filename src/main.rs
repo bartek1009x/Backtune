@@ -30,7 +30,6 @@ fn main() {
     let sdl_context = sdl2::init().unwrap();
     let audio_system = sdl_context.audio().unwrap();
     let mut audio_device: Option<player::AudioDeviceType> = None;
-    let mut audio_update_required = true;
     let mut loaded_audios: Vec<player::CopiedData> = Vec::new();
 
     player::init(&mut loaded_audios);
@@ -43,10 +42,7 @@ fn main() {
             }
         }
 
-        if audio_update_required {
-            player::update(&audio_system, &loaded_audios, &mut audio_device);
-            audio_update_required = false;
-        }
+        player::update(&audio_system, &loaded_audios, &mut audio_device);
 
         ::std::thread::sleep(Duration::new(0, 1_000_000_000u32 / 60));
     }
