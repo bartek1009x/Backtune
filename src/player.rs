@@ -98,16 +98,14 @@ impl AudioCallback for I32AudioCallback {
     }
 }
 
+static CURRENTLY_PLAYING: Mutex<bool> = Mutex::new(false);
+static CURRENTLY_PLAYING_INDEX: Mutex<usize> = Mutex::new(0);
+static STARTED_AT: Mutex<f64> = Mutex::new(0.0);
+static CHOSEN_WAIT: Mutex<f64> = Mutex::new(0.0);
+
 pub fn init(loaded_audios: &mut Vec<CopiedData>) {
     dir::load_audio(loaded_audios);
 }
-
-static CURRENTLY_PLAYING: Mutex<bool> = Mutex::new(true);
-static CURRENTLY_PLAYING_INDEX: Mutex<usize> = Mutex::new(0);
-static STARTED_AT: Mutex<f64> = Mutex::new(0.0);
-static MAX_WAIT: Mutex<f64> = Mutex::new(10.0);
-static MIN_WAIT: Mutex<f64> = Mutex::new(3.0);
-static CHOSEN_WAIT: Mutex<f64> = Mutex::new(0.0);
 
 pub enum AudioDeviceType {
     U8(AudioDevice<U8AudioCallback>),
@@ -119,6 +117,7 @@ pub fn update(
     audio_system: &sdl2::AudioSubsystem,
     loaded_audios: &Vec<CopiedData>,
     audio_device: &mut Option<AudioDeviceType>,
+    settings: Option<&crate::settings::Settings>,
 ) {
     let mut currently_playing = CURRENTLY_PLAYING.lock().unwrap();
     let mut chosen_wait = CHOSEN_WAIT.lock().unwrap();
@@ -132,8 +131,8 @@ pub fn update(
 
     if !*currently_playing {
         if *chosen_wait == 0.0 {
-            let min = *MIN_WAIT.lock().unwrap();
-            let max = *MAX_WAIT.lock().unwrap();
+            let min = settings.unwrap().min_wait_time;
+            let max = settings.unwrap().max_wait_time;
             let rand_time = rand::rng().random_range(min..max);
 
             *chosen_wait = now + rand_time;
@@ -153,8 +152,8 @@ pub fn update(
         if now >= finish_time {
             *currently_playing = false;
 
-            let min = *MIN_WAIT.lock().unwrap();
-            let max = *MAX_WAIT.lock().unwrap();
+            let min = settings.unwrap().min_wait_time;
+            let max = settings.unwrap().max_wait_time;
             let rand_time = rand::rng().random_range(min..max);
 
             *chosen_wait = now + rand_time;

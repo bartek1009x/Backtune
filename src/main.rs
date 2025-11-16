@@ -7,6 +7,7 @@ use std::time::Duration;
 
 mod dir;
 mod player;
+mod settings;
 
 fn main() {
     dir::init_dir();
@@ -32,6 +33,8 @@ fn main() {
     let mut audio_device: Option<player::AudioDeviceType> = None;
     let mut loaded_audios: Vec<player::CopiedData> = Vec::new();
 
+    let mut settings: Option<settings::Settings> = None;
+    settings::load_settings(&mut settings);
     player::init(&mut loaded_audios);
 
     'running: loop {
@@ -42,7 +45,7 @@ fn main() {
             }
         }
 
-        player::update(&audio_system, &loaded_audios, &mut audio_device);
+        player::update(&audio_system, &loaded_audios, &mut audio_device, settings.as_ref());
 
         ::std::thread::sleep(Duration::new(0, 1_000_000_000u32 / 60));
     }

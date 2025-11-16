@@ -21,7 +21,7 @@ pub fn init_dir() -> path::PathBuf {
 
     let settings_file = app_dir.join("settings.json");
     if !settings_file.exists() {
-        fs::write(&settings_file, "{}").expect("Could not create settings.json");
+        crate::settings::init_settings(&settings_file);
     }
 
     return app_dir;
