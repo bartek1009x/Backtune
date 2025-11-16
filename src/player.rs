@@ -102,8 +102,12 @@ pub fn init(loaded_audios: &mut Vec<CopiedData>) {
     dir::load_audio(loaded_audios);
 }
 
-static CURRENTLY_PLAYING: Mutex<bool> = Mutex::new(false);
+static CURRENTLY_PLAYING: Mutex<bool> = Mutex::new(true);
+static CURRENTLY_PLAYING_INDEX: Mutex<usize> = Mutex::new(0);
 static STARTED_AT: Mutex<f64> = Mutex::new(0.0);
+static MAX_WAIT: Mutex<f64> = Mutex::new(10.0);
+static MIN_WAIT: Mutex<f64> = Mutex::new(3.0);
+static CHOSEN_WAIT: Mutex<f64> = Mutex::new(0.0);
 
 pub enum AudioDeviceType {
     U8(AudioDevice<U8AudioCallback>),
@@ -117,15 +121,43 @@ pub fn update(
     audio_device: &mut Option<AudioDeviceType>,
 ) {
     let mut currently_playing = CURRENTLY_PLAYING.lock().unwrap();
+    let mut chosen_wait = CHOSEN_WAIT.lock().unwrap();
+    let mut started_at = STARTED_AT.lock().unwrap();
+    let mut current_index = CURRENTLY_PLAYING_INDEX.lock().unwrap();
+
+    let now = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .expect("Time error")
+        .as_secs_f64();
 
     if !*currently_playing {
-        play_random_audio(audio_system, loaded_audios, audio_device, &mut currently_playing);
-    } else if let Some(first_audio) = loaded_audios.get(0) {
-        if (*STARTED_AT.lock().unwrap() + first_audio.length) - SystemTime::now()
-            .duration_since(UNIX_EPOCH)
-            .expect("Time error")
-            .as_secs_f64() <= 0.0 {
+        if *chosen_wait == 0.0 {
+            let min = *MIN_WAIT.lock().unwrap();
+            let max = *MAX_WAIT.lock().unwrap();
+            let rand_time = rand::rng().random_range(min..max);
+
+            *chosen_wait = now + rand_time;
+            return;
+        }
+
+        if now >= *chosen_wait {
+            play_random_audio(audio_system, loaded_audios, audio_device, &mut currently_playing, &mut current_index, &mut started_at);
+
+            *started_at = now;
+            *chosen_wait = 0.0;
+        }
+
+    } else if let Some(audio) = loaded_audios.get(*current_index) {
+        let finish_time = *started_at + audio.length;
+
+        if now >= finish_time {
             *currently_playing = false;
+
+            let min = *MIN_WAIT.lock().unwrap();
+            let max = *MAX_WAIT.lock().unwrap();
+            let rand_time = rand::rng().random_range(min..max);
+
+            *chosen_wait = now + rand_time;
         }
     }
 }
@@ -135,6 +167,8 @@ fn play_random_audio(
     loaded_audios: &Vec<CopiedData>,
     audio_device: &mut Option<AudioDeviceType>,
     currently_playing: &mut bool,
+    currently_playing_index: &mut usize,
+    started_at: &mut f64,
 ) {
 
     let mut rng = rand::rng();
@@ -201,12 +235,12 @@ fn play_random_audio(
             }
         }
 
-        let mut started_at = STARTED_AT.lock().unwrap();
         *started_at = SystemTime::now()
             .duration_since(UNIX_EPOCH)
             .expect("Time error")
             .as_secs_f64();
 
         *currently_playing = true;
+        *currently_playing_index = random_i;
     }
 }
