@@ -7,6 +7,7 @@ use crate::dir;
 use std::sync::Mutex;
 use std::time::{SystemTime, UNIX_EPOCH};
 use std::vec::Vec;
+use rand::prelude::*;
 
 #[derive(Clone)]
 pub struct CopiedData {
@@ -118,7 +119,7 @@ pub fn update(
     let mut currently_playing = CURRENTLY_PLAYING.lock().unwrap();
 
     if !*currently_playing {
-        play_audio(audio_system, loaded_audios, audio_device, &mut currently_playing);
+        play_random_audio(audio_system, loaded_audios, audio_device, &mut currently_playing);
     } else if let Some(first_audio) = loaded_audios.get(0) {
         if (*STARTED_AT.lock().unwrap() + first_audio.length) - SystemTime::now()
             .duration_since(UNIX_EPOCH)
@@ -129,13 +130,17 @@ pub fn update(
     }
 }
 
-fn play_audio(
+fn play_random_audio(
     audio_system: &sdl2::AudioSubsystem,
     loaded_audios: &Vec<CopiedData>,
     audio_device: &mut Option<AudioDeviceType>,
     currently_playing: &mut bool,
 ) {
-    if let Some(first_audio) = loaded_audios.get(0) {
+
+    let mut rng = rand::rng();
+    let random_i = rng.random_range(..loaded_audios.len());
+
+    if let Some(first_audio) = loaded_audios.get(random_i) {
         let audio_spec = AudioSpecDesired {
             freq: Some(first_audio.freq),
             channels: Some(first_audio.channels),
