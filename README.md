@@ -1,6 +1,6 @@
 # Backtune
 Backtune is a work in progress app that adds a background soundtrack to your daily life. Ever imagined what it would feel like if random themes would start playing while you're doing something in real life? Well, you'd need to walk in
-headphones 24/7 to experience that, but hey, at lesat this app plays a random theme every now and then while you're on your computer, which is already where many people spend most of their life! (which, just saying, isn't actually good for you)
+headphones 24/7 to experience that, but hey, at least this app plays a random theme every now and then while you're on your computer, which is already where many people spend most of their life! (which, just saying, isn't actually good for you)
 
 # This is a Rust learning project,
 so expect the code to *not* be of top quality. I tried to not use any unsafe code blocks, though, so it should be memory safe.
