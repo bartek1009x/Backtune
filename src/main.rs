@@ -3,6 +3,7 @@ extern crate sdl2;
 use sdl2::event::Event;
 use sdl2::pixels::Color;
 
+use std::path;
 use std::time::Duration;
 
 mod dir;
@@ -31,11 +32,12 @@ fn main() {
     let sdl_context = sdl2::init().unwrap();
     let audio_system = sdl_context.audio().unwrap();
     let mut audio_device: Option<player::AudioDeviceType> = None;
-    let mut loaded_audios: Vec<player::CopiedData> = Vec::new();
+    let mut loaded_audio_paths: Vec<path::PathBuf> = Vec::new();
+    let mut loaded_audio: Option<player::CopiedData> = None;
 
     let mut settings: Option<settings::Settings> = None;
     settings::load_settings(&mut settings);
-    player::init(&mut loaded_audios);
+    player::init(&mut loaded_audio_paths);
 
     'running: loop {
         for event in event_pump.poll_iter() {
@@ -45,7 +47,7 @@ fn main() {
             }
         }
 
-        player::update(&audio_system, &loaded_audios, &mut audio_device, settings.as_ref());
+        player::update(&audio_system, &loaded_audio_paths, &mut audio_device, settings.as_ref(), &mut loaded_audio);
 
         ::std::thread::sleep(Duration::new(0, 1_000_000_000u32 / 60));
     }

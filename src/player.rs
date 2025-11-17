@@ -1,12 +1,15 @@
 extern crate sdl2;
 
-use sdl2::audio::{AudioCallback, AudioDevice, AudioSpecDesired};
+use sdl2::audio::{AudioCallback, AudioDevice, AudioSpecDesired, AudioSpecWAV};
 
 use crate::dir;
 
+use std::iter::Copied;
+use std::path::PathBuf;
 use std::sync::Mutex;
 use std::time::{SystemTime, UNIX_EPOCH};
 use std::vec::Vec;
+use std::path;
 use rand::prelude::*;
 
 #[derive(Clone)]
@@ -103,8 +106,8 @@ static CURRENTLY_PLAYING_INDEX: Mutex<usize> = Mutex::new(0);
 static STARTED_AT: Mutex<f64> = Mutex::new(0.0);
 static CHOSEN_WAIT: Mutex<f64> = Mutex::new(0.0);
 
-pub fn init(loaded_audios: &mut Vec<CopiedData>) {
-    dir::load_audio(loaded_audios);
+pub fn init(loaded_audio_paths: &mut Vec<path::PathBuf>) {
+    dir::load_audio(loaded_audio_paths);
 }
 
 pub enum AudioDeviceType {
@@ -115,9 +118,10 @@ pub enum AudioDeviceType {
 
 pub fn update(
     audio_system: &sdl2::AudioSubsystem,
-    loaded_audios: &Vec<CopiedData>,
+    loaded_audio_paths: &Vec<path::PathBuf>,
     audio_device: &mut Option<AudioDeviceType>,
     settings: Option<&crate::settings::Settings>,
+    loaded_audio: &mut Option<CopiedData>,
 ) {
     let mut currently_playing = CURRENTLY_PLAYING.lock().unwrap();
     let mut chosen_wait = CHOSEN_WAIT.lock().unwrap();
@@ -140,106 +144,178 @@ pub fn update(
         }
 
         if now >= *chosen_wait {
-            play_random_audio(audio_system, loaded_audios, audio_device, &mut currently_playing, &mut current_index, &mut started_at);
+            play_random_audio(audio_system, loaded_audio_paths, audio_device, &mut currently_playing, &mut current_index, &mut started_at, loaded_audio);
 
             *started_at = now;
             *chosen_wait = 0.0;
         }
 
-    } else if let Some(audio) = loaded_audios.get(*current_index) {
-        let finish_time = *started_at + audio.length;
+    } else {
+        match loaded_audio {
+            Some(existing_audio) => {
+                let finish_time = *started_at + existing_audio.length;
 
-        if now >= finish_time {
-            *currently_playing = false;
+                if now >= finish_time {
+                    *currently_playing = false;
 
-            let min = settings.unwrap().min_wait_time;
-            let max = settings.unwrap().max_wait_time;
-            let rand_time = rand::rng().random_range(min..max);
 
-            *chosen_wait = now + rand_time;
+                    let min = settings.unwrap().min_wait_time;
+                    let max = settings.unwrap().max_wait_time;
+                    let rand_time = rand::rng().random_range(min..max);
+
+                    *chosen_wait = now + rand_time;
+                }
+            }
+            None => {
+                println!("Error playing the audio: not loaded properly");
+            }
         }
     }
 }
 
 fn play_random_audio(
     audio_system: &sdl2::AudioSubsystem,
-    loaded_audios: &Vec<CopiedData>,
+    loaded_audio_paths: &Vec<path::PathBuf>,
     audio_device: &mut Option<AudioDeviceType>,
     currently_playing: &mut bool,
     currently_playing_index: &mut usize,
     started_at: &mut f64,
+    loaded_audio: &mut Option<CopiedData>
 ) {
 
     let mut rng = rand::rng();
-    let random_i = rng.random_range(..loaded_audios.len());
+    let random_i = rng.random_range(..loaded_audio_paths.len());
 
-    if let Some(first_audio) = loaded_audios.get(random_i) {
-        let audio_spec = AudioSpecDesired {
-            freq: Some(first_audio.freq),
-            channels: Some(first_audio.channels),
-            samples: None,
-        };
+    if let Some(audio_path) = loaded_audio_paths.get(random_i) {
 
-        match first_audio.format {
-            AudioFormat::U8 => {
-                let callback = U8AudioCallback {
-                    bytes: first_audio.bytes.clone(),
-                    position: 0,
+        setup_audio(audio_path, loaded_audio);
+
+        match loaded_audio {
+            Some(existing_audio) => {
+                let audio_spec = AudioSpecDesired {
+                    freq: Some(existing_audio.freq),
+                    channels: Some(existing_audio.channels),
+                    samples: None,
                 };
 
-                let device = audio_system
-                    .open_playback(None, &audio_spec, move |_spec| callback)
-                    .unwrap();
+                match existing_audio.format {
+                    AudioFormat::U8 => {
+                        let callback = U8AudioCallback {
+                            bytes: existing_audio.bytes.clone(),
+                            position: 0,
+                        };
 
-                device.resume();
-                *audio_device = Some(AudioDeviceType::U8(device));
+                        let device = audio_system
+                            .open_playback(None, &audio_spec, move |_spec| callback)
+                            .unwrap();
+
+                        device.resume();
+                        *audio_device = Some(AudioDeviceType::U8(device));
+                    }
+                    AudioFormat::I16 => {
+                        let samples: Vec<i16> = existing_audio
+                            .bytes
+                            .chunks_exact(2)
+                            .map(|chunk| i16::from_le_bytes([chunk[0], chunk[1]]))
+                            .collect();
+
+                        let callback = I16AudioCallback {
+                            samples,
+                            position: 0,
+                        };
+
+                        let device = audio_system
+                            .open_playback(None, &audio_spec, move |_spec| callback)
+                            .unwrap();
+
+                        device.resume();
+                        *audio_device = Some(AudioDeviceType::I16(device));
+                    }
+                    AudioFormat::I32 => {
+                        let samples: Vec<i32> = existing_audio
+                            .bytes
+                            .chunks_exact(4)
+                            .map(|chunk| i32::from_le_bytes([chunk[0], chunk[1], chunk[2], chunk[3]]))
+                            .collect();
+
+                        let callback = I32AudioCallback {
+                            samples,
+                            position: 0,
+                        };
+
+                        let device = audio_system
+                            .open_playback(None, &audio_spec, move |_spec| callback)
+                            .unwrap();
+
+                        device.resume();
+                        *audio_device = Some(AudioDeviceType::I32(device));
+                    }
+                }
+
+                *started_at = SystemTime::now()
+                    .duration_since(UNIX_EPOCH)
+                    .expect("Time error")
+                    .as_secs_f64();
+
+                *currently_playing = true;
+                *currently_playing_index = random_i;
             }
-            AudioFormat::I16 => {
-                let samples: Vec<i16> = first_audio
-                    .bytes
-                    .chunks_exact(2)
-                    .map(|chunk| i16::from_le_bytes([chunk[0], chunk[1]]))
-                    .collect();
-
-                let callback = I16AudioCallback {
-                    samples,
-                    position: 0,
-                };
-
-                let device = audio_system
-                    .open_playback(None, &audio_spec, move |_spec| callback)
-                    .unwrap();
-
-                device.resume();
-                *audio_device = Some(AudioDeviceType::I16(device));
-            }
-            AudioFormat::I32 => {
-                let samples: Vec<i32> = first_audio
-                    .bytes
-                    .chunks_exact(4)
-                    .map(|chunk| i32::from_le_bytes([chunk[0], chunk[1], chunk[2], chunk[3]]))
-                    .collect();
-
-                let callback = I32AudioCallback {
-                    samples,
-                    position: 0,
-                };
-
-                let device = audio_system
-                    .open_playback(None, &audio_spec, move |_spec| callback)
-                    .unwrap();
-
-                device.resume();
-                *audio_device = Some(AudioDeviceType::I32(device));
+            None => {
+                println!("Error playing the audio: not loaded properly")
             }
         }
+    }
+}
 
-        *started_at = SystemTime::now()
-            .duration_since(UNIX_EPOCH)
-            .expect("Time error")
-            .as_secs_f64();
+fn setup_audio(
+    entry_path: &PathBuf,
+    loaded_audio: &mut Option<CopiedData>,
+) {
+    if let Ok(audio_wav) = AudioSpecWAV::load_wav(&entry_path) {
+        let format = match audio_wav.format {
+            sdl2::audio::AudioFormat::U8 => crate::player::AudioFormat::U8,
+            sdl2::audio::AudioFormat::S16LSB | sdl2::audio::AudioFormat::S16MSB => {
+                crate::player::AudioFormat::I16
+            }
+            sdl2::audio::AudioFormat::S32LSB | sdl2::audio::AudioFormat::S32MSB => {
+                crate::player::AudioFormat::I32
+            }
+            _ => {
+                println!(
+                    "Unsupported audio format {:?} for {:?}, skipping",
+                    audio_wav.format, entry_path
+                );
+                return;
+            }
+        };
 
-        *currently_playing = true;
-        *currently_playing_index = random_i;
+        let total_bytes = audio_wav.buffer().len();
+        let bytes_per_sample = bytes_per_sample(audio_wav.format);
+
+        let samples_per_second = audio_wav.freq as usize * audio_wav.channels as usize;
+        let bytes_per_second = samples_per_second * bytes_per_sample;
+
+        let seconds = total_bytes as f64 / bytes_per_second as f64;
+
+        let copied_data = crate::player::CopiedData {
+            bytes: audio_wav.buffer().to_vec(),
+            position: 0,
+            freq: audio_wav.freq,
+            channels: audio_wav.channels,
+            format,
+            length: seconds,
+        };
+
+        *loaded_audio = Some(copied_data);
+    }
+}
+
+#[inline]
+fn bytes_per_sample(format: sdl2::audio::AudioFormat) -> usize {
+    match format {
+        sdl2::audio::AudioFormat::U8 => 1,
+        sdl2::audio::AudioFormat::S16LSB | sdl2::audio::AudioFormat::S16MSB => 2,
+        sdl2::audio::AudioFormat::S32LSB | sdl2::audio::AudioFormat::S32MSB => 4,
+        _ => panic!("Unsupported format"),
     }
 }
