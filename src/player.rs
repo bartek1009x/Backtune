@@ -4,7 +4,6 @@ use sdl2::audio::{AudioCallback, AudioDevice, AudioSpecDesired, AudioSpecWAV};
 
 use crate::dir;
 
-use std::iter::Copied;
 use std::path::PathBuf;
 use std::sync::Mutex;
 use std::time::{SystemTime, UNIX_EPOCH};
@@ -107,7 +106,7 @@ static STARTED_AT: Mutex<f64> = Mutex::new(0.0);
 static CHOSEN_WAIT: Mutex<f64> = Mutex::new(0.0);
 
 pub fn init(loaded_audio_paths: &mut Vec<path::PathBuf>) {
-    dir::load_audio(loaded_audio_paths);
+    dir::load_audio_paths(loaded_audio_paths);
 }
 
 pub enum AudioDeviceType {

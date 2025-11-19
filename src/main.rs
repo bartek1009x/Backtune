@@ -1,13 +1,17 @@
 extern crate sdl2;
 
 use sdl2::event::Event;
-use sdl2::pixels::Color;
+use sdl2::render::Texture;
+use sdl2::sys::{SDL_GetDisplayMode, SDL_GetWindowDisplayMode};
+use sdl2::ttf::Font;
 
+use std::collections::HashMap;
 use std::path;
 use std::time::Duration;
 
 mod dir;
 mod player;
+mod renderer;
 mod settings;
 
 fn main() {
@@ -22,11 +26,6 @@ fn main() {
         .build()
         .unwrap();
 
-    let mut canvas = window.into_canvas().build().unwrap();
-    canvas.set_draw_color(Color::RGB(32, 32, 32));
-    canvas.clear();
-    canvas.present();
-
     let mut event_pump = sdl_context.event_pump().unwrap();
 
     let sdl_context = sdl2::init().unwrap();
@@ -39,15 +38,53 @@ fn main() {
     settings::load_settings(&mut settings);
     player::init(&mut loaded_audio_paths);
 
+    let mut canvas = window.into_canvas().build().unwrap();
+    let texture_creator = canvas.texture_creator();
+    let ttf_context = sdl2::ttf::init().unwrap();
+    let mut textures: HashMap<String, Texture> = HashMap::new();
+    let mut font: Option<Font> = None;
+    renderer::init(
+        &mut canvas,
+        &texture_creator,
+        &mut textures,
+        &ttf_context,
+        &mut font,
+    );
+
     'running: loop {
         for event in event_pump.poll_iter() {
             match event {
                 Event::Quit { .. } => break 'running,
+                Event::MouseMotion {
+                    timestamp: _,
+                    window_id: _,
+                    which: _,
+                    mousestate: _,
+                    x,
+                    y,
+                    xrel: _,
+                    yrel: _,
+                } => {
+                    renderer::update(
+                        &mut canvas,
+                        &texture_creator,
+                        &mut textures,
+                        &mut font,
+                        x,
+                        y,
+                    );
+                }
                 _ => {}
             }
         }
 
-        player::update(&audio_system, &loaded_audio_paths, &mut audio_device, settings.as_ref(), &mut loaded_audio);
+        player::update(
+            &audio_system,
+            &loaded_audio_paths,
+            &mut audio_device,
+            settings.as_ref(),
+            &mut loaded_audio,
+        );
 
         ::std::thread::sleep(Duration::new(0, 1_000_000_000u32 / 60));
     }
