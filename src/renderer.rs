@@ -1,4 +1,5 @@
 use sdl2::image::{InitFlag, LoadTexture};
+use sdl2::mouse::MouseState;
 use sdl2::pixels::Color;
 use sdl2::rect::Rect;
 use sdl2::render::Canvas;
@@ -23,6 +24,7 @@ pub fn init<'a>(
     textures: &mut HashMap<String, Texture<'a>>,
     ttf_context: &'a sdl2::ttf::Sdl2TtfContext,
     font: &mut Option<sdl2::ttf::Font<'a, 'a>>,
+    play: &mut bool,
 ) {
     let _image_context = sdl2::image::init(InitFlag::PNG | InitFlag::JPG);
 
@@ -71,7 +73,19 @@ pub fn init<'a>(
         }
     }
 
-    present_buttons(canvas, textures, 0, 0);
+    let mut button_states = [false, false, false];
+    let mut x: Option<crate::player::AudioDeviceType> = None;
+
+    present_buttons(
+        canvas,
+        textures,
+        &mut button_states,
+        play,
+        &mut x,
+        0,
+        0,
+        false,
+    );
 }
 
 pub fn update(
@@ -79,8 +93,12 @@ pub fn update(
     texture_creator: &sdl2::render::TextureCreator<WindowContext>,
     textures: &mut HashMap<String, Texture>,
     font: &mut Option<sdl2::ttf::Font>,
+    last_button_states: &mut [bool; 3],
+    play: &mut bool,
+    audio_device: &mut Option<crate::player::AudioDeviceType>,
     mouse_x: i32,
     mouse_y: i32,
+    mouse_down: bool,
 ) {
     clear(canvas);
 
@@ -103,7 +121,16 @@ pub fn update(
         Rect::new(960 / 2 - 175, 0, 350, 100),
     );
 
-    present_buttons(canvas, textures, mouse_x, mouse_y);
+    present_buttons(
+        canvas,
+        textures,
+        last_button_states,
+        play,
+        audio_device,
+        mouse_x,
+        mouse_y,
+        mouse_down,
+    );
 }
 
 #[inline]
@@ -115,8 +142,12 @@ fn clear(canvas: &mut Canvas<Window>) {
 fn present_buttons(
     canvas: &mut Canvas<Window>,
     textures: &mut HashMap<String, Texture>,
+    last_button_states: &mut [bool; 3],
+    play: &mut bool,
+    audio_device: &mut Option<crate::player::AudioDeviceType>,
     mouse_x: i32,
     mouse_y: i32,
+    mouse_pressed: bool,
 ) {
     let button1_rect = Rect::new(960 / 2 - 165, 100, 100, 100);
     let button2_rect = Rect::new(960 / 2 - 55, 100, 100, 100);
@@ -133,13 +164,28 @@ fn present_buttons(
     );
 
     if hovered1 {
-        let _ = canvas.copy(&textures.get("button_hover").unwrap(), None, button1_rect);
+        if mouse_pressed {
+            let _ = canvas.copy(
+                &textures.get("button_mouse_down").unwrap(),
+                None,
+                button1_rect,
+            );
+
+            last_button_states[0] = true;
+        } else {
+            let _ = canvas.copy(&textures.get("button_hover").unwrap(), None, button1_rect);
+            if last_button_states[0] {
+                let _ = crate::controller::play_button(play);
+            }
+            last_button_states[1] = false;
+        }
     } else {
         let _ = canvas.copy(
             &textures.get("button_inactive").unwrap(),
             None,
             button1_rect,
         );
+        last_button_states[0] = false;
     }
     let _ = canvas.copy(&textures.get("play").unwrap(), None, button1_rect);
 
@@ -154,13 +200,28 @@ fn present_buttons(
     );
 
     if hovered2 {
-        let _ = canvas.copy(&textures.get("button_hover").unwrap(), None, button2_rect);
+        if mouse_pressed {
+            let _ = canvas.copy(
+                &textures.get("button_mouse_down").unwrap(),
+                None,
+                button2_rect,
+            );
+
+            last_button_states[1] = true;
+        } else {
+            let _ = canvas.copy(&textures.get("button_hover").unwrap(), None, button2_rect);
+            if last_button_states[1] {
+                let _ = crate::controller::stop_button(audio_device, play);
+            }
+            last_button_states[1] = false;
+        }
     } else {
         let _ = canvas.copy(
             &textures.get("button_inactive").unwrap(),
             None,
             button2_rect,
         );
+        last_button_states[1] = false;
     }
     let _ = canvas.copy(&textures.get("stop").unwrap(), None, button2_rect);
 
@@ -175,13 +236,29 @@ fn present_buttons(
     );
 
     if hovered3 {
-        let _ = canvas.copy(&textures.get("button_hover").unwrap(), None, button3_rect);
+        if mouse_pressed {
+            let _ = canvas.copy(
+                &textures.get("button_mouse_down").unwrap(),
+                None,
+                button3_rect,
+            );
+
+            last_button_states[2] = true;
+        } else {
+            let _ = canvas.copy(&textures.get("button_hover").unwrap(), None, button3_rect);
+            if last_button_states[2] {
+                let _ = crate::controller::folder_button();
+            }
+            last_button_states[2] = false;
+        }
     } else {
         let _ = canvas.copy(
             &textures.get("button_inactive").unwrap(),
             None,
             button3_rect,
         );
+
+        last_button_states[2] = false;
     }
     let _ = canvas.copy(&textures.get("folder").unwrap(), None, button3_rect);
 

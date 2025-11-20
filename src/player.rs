@@ -4,12 +4,13 @@ use sdl2::audio::{AudioCallback, AudioDevice, AudioSpecDesired, AudioSpecWAV};
 
 use crate::dir;
 
+use rand::prelude::*;
+use std::ops::DerefMut;
+use std::path;
 use std::path::PathBuf;
-use std::sync::Mutex;
+use std::sync::{Mutex, MutexGuard};
 use std::time::{SystemTime, UNIX_EPOCH};
 use std::vec::Vec;
-use std::path;
-use rand::prelude::*;
 
 #[derive(Clone)]
 pub struct CopiedData {
@@ -119,7 +120,7 @@ pub fn update(
     audio_system: &sdl2::AudioSubsystem,
     loaded_audio_paths: &Vec<path::PathBuf>,
     audio_device: &mut Option<AudioDeviceType>,
-    settings: Option<&crate::settings::Settings>,
+    settings: &crate::settings::Settings,
     loaded_audio: &mut Option<CopiedData>,
 ) {
     let mut currently_playing = CURRENTLY_PLAYING.lock().unwrap();
@@ -134,8 +135,8 @@ pub fn update(
 
     if !*currently_playing {
         if *chosen_wait == 0.0 {
-            let min = settings.unwrap().min_wait_time;
-            let max = settings.unwrap().max_wait_time;
+            let min = settings.min_wait_time;
+            let max = settings.max_wait_time;
             let rand_time = rand::rng().random_range(min..max);
 
             *chosen_wait = now + rand_time;
@@ -143,26 +144,26 @@ pub fn update(
         }
 
         if now >= *chosen_wait {
-            play_random_audio(audio_system, loaded_audio_paths, audio_device, &mut currently_playing, &mut current_index, &mut started_at, loaded_audio);
+            play_random_audio(
+                audio_system,
+                loaded_audio_paths,
+                audio_device,
+                &mut currently_playing,
+                &mut current_index,
+                &mut started_at,
+                loaded_audio,
+            );
 
             *started_at = now;
             *chosen_wait = 0.0;
         }
-
     } else {
         match loaded_audio {
             Some(existing_audio) => {
                 let finish_time = *started_at + existing_audio.length;
 
                 if now >= finish_time {
-                    *currently_playing = false;
-
-
-                    let min = settings.unwrap().min_wait_time;
-                    let max = settings.unwrap().max_wait_time;
-                    let rand_time = rand::rng().random_range(min..max);
-
-                    *chosen_wait = now + rand_time;
+                    stop_audio(audio_device, settings, &now);
                 }
             }
             None => {
@@ -172,6 +173,30 @@ pub fn update(
     }
 }
 
+pub fn stop_audio(
+    audio_device: &mut Option<AudioDeviceType>,
+    settings: &crate::settings::Settings,
+    now: &f64,
+) {
+    if let Some(dev) = audio_device {
+        match dev {
+            AudioDeviceType::U8(d) => d.pause(),
+            AudioDeviceType::I16(d) => d.pause(),
+            AudioDeviceType::I32(d) => d.pause(),
+        }
+    }
+
+    *audio_device = None;
+
+    *CURRENTLY_PLAYING.lock().unwrap() = false;
+
+    let min = settings.min_wait_time;
+    let max = settings.max_wait_time;
+    let rand_time = rand::rng().random_range(min..max);
+
+    *CHOSEN_WAIT.lock().unwrap() = now + rand_time;
+}
+
 fn play_random_audio(
     audio_system: &sdl2::AudioSubsystem,
     loaded_audio_paths: &Vec<path::PathBuf>,
@@ -179,14 +204,12 @@ fn play_random_audio(
     currently_playing: &mut bool,
     currently_playing_index: &mut usize,
     started_at: &mut f64,
-    loaded_audio: &mut Option<CopiedData>
+    loaded_audio: &mut Option<CopiedData>,
 ) {
-
     let mut rng = rand::rng();
     let random_i = rng.random_range(..loaded_audio_paths.len());
 
     if let Some(audio_path) = loaded_audio_paths.get(random_i) {
-
         setup_audio(audio_path, loaded_audio);
 
         match loaded_audio {
@@ -234,7 +257,9 @@ fn play_random_audio(
                         let samples: Vec<i32> = existing_audio
                             .bytes
                             .chunks_exact(4)
-                            .map(|chunk| i32::from_le_bytes([chunk[0], chunk[1], chunk[2], chunk[3]]))
+                            .map(|chunk| {
+                                i32::from_le_bytes([chunk[0], chunk[1], chunk[2], chunk[3]])
+                            })
                             .collect();
 
                         let callback = I32AudioCallback {
@@ -266,10 +291,7 @@ fn play_random_audio(
     }
 }
 
-fn setup_audio(
-    entry_path: &PathBuf,
-    loaded_audio: &mut Option<CopiedData>,
-) {
+fn setup_audio(entry_path: &PathBuf, loaded_audio: &mut Option<CopiedData>) {
     if let Ok(audio_wav) = AudioSpecWAV::load_wav(&entry_path) {
         let format = match audio_wav.format {
             sdl2::audio::AudioFormat::U8 => crate::player::AudioFormat::U8,
