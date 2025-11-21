@@ -1,6 +1,6 @@
 extern crate sdl2;
 
-use sdl2::event::Event;
+use sdl2::event::{Event, WindowEvent};
 use sdl2::mouse::MouseButton;
 use sdl2::render::Texture;
 use sdl2::ttf::Font;
@@ -54,33 +54,46 @@ fn main() {
         &mut textures,
         &ttf_context,
         &mut font,
-        &mut play,
     );
 
-    let mut last_button_states = [false; 3];
+    let mut last_button_states = [false; 5];
+    let mut window_focused = true;
 
     'running: loop {
         for event in event_pump.poll_iter() {
             match event {
                 Event::Quit { .. } => break 'running,
+                Event::Window {
+                    timestamp: _,
+                    window_id: _,
+                    win_event,
+                } => {
+                    if win_event == WindowEvent::FocusGained {
+                        window_focused = true;
+                    } else if win_event == WindowEvent::FocusLost {
+                        window_focused = false;
+                    }
+                }
                 _ => {}
             }
         }
 
-        let mouse_state = event_pump.mouse_state();
+        if window_focused {
+            let mouse_state = event_pump.mouse_state();
 
-        renderer::update(
-            &mut canvas,
-            &texture_creator,
-            &mut textures,
-            &mut font,
-            &mut last_button_states,
-            &mut play,
-            &mut audio_device,
-            mouse_state.x(),
-            mouse_state.y(),
-            mouse_state.is_mouse_button_pressed(MouseButton::Left),
-        );
+            renderer::update(
+                &mut canvas,
+                &texture_creator,
+                &mut textures,
+                &mut font,
+                &mut last_button_states,
+                &mut play,
+                &mut audio_device,
+                mouse_state.x(),
+                mouse_state.y(),
+                mouse_state.is_mouse_button_pressed(MouseButton::Left),
+            );
+        }
 
         if play {
             player::update(

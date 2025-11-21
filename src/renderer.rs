@@ -1,21 +1,25 @@
+use rand::TryRngCore;
 use sdl2::image::{InitFlag, LoadTexture};
-use sdl2::mouse::MouseState;
 use sdl2::pixels::Color;
 use sdl2::rect::Rect;
 use sdl2::render::Canvas;
 use sdl2::render::Texture;
 use sdl2::video::{Window, WindowContext};
+use serde_json::to_string;
 
 use std::collections::HashMap;
 use std::path;
 
-const TEXTURE_NAMES: [&str; 6] = [
+const TEXTURE_NAMES: [&str; 9] = [
     "button_inactive",
     "button_hover",
     "button_mouse_down",
     "play",
     "stop",
     "folder",
+    "value_active",
+    "value_hover",
+    "value_inactive",
 ];
 
 pub fn init<'a>(
@@ -24,7 +28,6 @@ pub fn init<'a>(
     textures: &mut HashMap<String, Texture<'a>>,
     ttf_context: &'a sdl2::ttf::Sdl2TtfContext,
     font: &mut Option<sdl2::ttf::Font<'a, 'a>>,
-    play: &mut bool,
 ) {
     let _image_context = sdl2::image::init(InitFlag::PNG | InitFlag::JPG);
 
@@ -37,21 +40,6 @@ pub fn init<'a>(
     match attempted_font {
         Ok(mut existing_font) => {
             existing_font.set_style(sdl2::ttf::FontStyle::NORMAL);
-
-            let surface = existing_font
-                .render("Backtune")
-                .blended(Color::RGBA(255, 255, 255, 255))
-                .map_err(|e| e.to_string());
-            let texture = texture_creator
-                .create_texture_from_surface(&surface.unwrap())
-                .map_err(|e| e.to_string());
-
-            let _ = canvas.copy(
-                &mut texture.as_ref().unwrap(),
-                None,
-                Rect::new(960 / 2 - 175, 0, 350, 100),
-            );
-
             *font = Some(existing_font);
         }
         Err(err) => {
@@ -72,20 +60,6 @@ pub fn init<'a>(
             }
         }
     }
-
-    let mut button_states = [false, false, false];
-    let mut x: Option<crate::player::AudioDeviceType> = None;
-
-    present_buttons(
-        canvas,
-        textures,
-        &mut button_states,
-        play,
-        &mut x,
-        0,
-        0,
-        false,
-    );
 }
 
 pub fn update(
@@ -93,7 +67,7 @@ pub fn update(
     texture_creator: &sdl2::render::TextureCreator<WindowContext>,
     textures: &mut HashMap<String, Texture>,
     font: &mut Option<sdl2::ttf::Font>,
-    last_button_states: &mut [bool; 3],
+    last_button_states: &mut [bool; 5],
     play: &mut bool,
     audio_device: &mut Option<crate::player::AudioDeviceType>,
     mouse_x: i32,
@@ -102,24 +76,29 @@ pub fn update(
 ) {
     clear(canvas);
 
-    font.as_mut()
-        .unwrap()
-        .set_style(sdl2::ttf::FontStyle::NORMAL);
-    let surface = font
-        .as_ref()
-        .unwrap()
-        .render("Backtune")
-        .blended(Color::RGBA(255, 255, 255, 255))
-        .map_err(|e| e.to_string());
-    let texture = texture_creator
-        .create_texture_from_surface(&surface.unwrap())
-        .map_err(|e| e.to_string());
+    match font {
+        Some(existing_font) => {
+            draw_text(
+                canvas,
+                texture_creator,
+                existing_font,
+                "Backtune",
+                Rect::new(960 / 2 - 175, 0, 350, 100),
+            );
 
-    let _ = canvas.copy(
-        &mut texture.as_ref().unwrap(),
-        None,
-        Rect::new(960 / 2 - 175, 0, 350, 100),
-    );
+            present_settings(
+                canvas,
+                texture_creator,
+                textures,
+                existing_font,
+                last_button_states,
+                mouse_x,
+                mouse_y,
+                mouse_down,
+            );
+        }
+        None => {}
+    }
 
     present_buttons(
         canvas,
@@ -139,10 +118,142 @@ fn clear(canvas: &mut Canvas<Window>) {
     canvas.clear();
 }
 
+fn present_settings(
+    canvas: &mut Canvas<Window>,
+    texture_creator: &sdl2::render::TextureCreator<WindowContext>,
+    textures: &mut HashMap<String, Texture>,
+    font: &mut sdl2::ttf::Font,
+    last_button_states: &mut [bool; 5],
+    mouse_x: i32,
+    mouse_y: i32,
+    mouse_pressed: bool,
+) {
+    draw_text(
+        canvas,
+        texture_creator,
+        font,
+        "Minimum wait time",
+        Rect::new(200, 250, 350, 50),
+    );
+
+    draw_text(
+        canvas,
+        texture_creator,
+        font,
+        "Maximum wait time",
+        Rect::new(200, 315, 350, 50),
+    );
+
+    let button1_rect = Rect::new(660, 250, 100, 50);
+    let button2_rect = Rect::new(660, 315, 100, 50);
+
+    // BUTTON 1
+    let hovered1 = is_mouse_over_button(
+        mouse_x,
+        mouse_y,
+        button1_rect.x(),
+        button1_rect.x() + button1_rect.width() as i32,
+        button1_rect.y(),
+        button1_rect.y() + button1_rect.height() as i32,
+    );
+
+    if hovered1 {
+        if mouse_pressed {
+            let _ = canvas.copy(&textures.get("value_active").unwrap(), None, button1_rect);
+
+            last_button_states[3] = true;
+        } else {
+            let _ = canvas.copy(&textures.get("value_hover").unwrap(), None, button1_rect);
+            if last_button_states[3] {
+                // click
+            }
+            last_button_states[3] = false;
+        }
+    } else {
+        let _ = canvas.copy(&textures.get("value_inactive").unwrap(), None, button1_rect);
+        last_button_states[3] = false;
+    }
+
+    let mut wait_time = crate::settings::get_cloned_settings()
+        .min_wait_time
+        .to_string();
+
+    let mut scale = match wait_time.len() {
+        1 => 0.25,
+        2 => 0.50,
+        3 => 0.75,
+        _ => 1.0,
+    };
+
+    let mut full_w = button1_rect.width() as f32;
+    let mut scaled_w = full_w * scale;
+
+    let mut x = button1_rect.x + ((full_w - scaled_w) / 2.0) as i32;
+
+    draw_text(
+        canvas,
+        texture_creator,
+        font,
+        &wait_time,
+        Rect::new(x, button1_rect.y, scaled_w as u32, button1_rect.height()),
+    );
+
+    // BUTTON 2
+    let hovered2 = is_mouse_over_button(
+        mouse_x,
+        mouse_y,
+        button2_rect.x(),
+        button2_rect.x() + button2_rect.width() as i32,
+        button2_rect.y(),
+        button2_rect.y() + button2_rect.height() as i32,
+    );
+
+    if hovered2 {
+        if mouse_pressed {
+            let _ = canvas.copy(&textures.get("value_active").unwrap(), None, button2_rect);
+
+            last_button_states[4] = true;
+        } else {
+            let _ = canvas.copy(&textures.get("value_hover").unwrap(), None, button2_rect);
+            if last_button_states[4] {
+                // click
+            }
+            last_button_states[4] = false;
+        }
+    } else {
+        let _ = canvas.copy(&textures.get("value_inactive").unwrap(), None, button2_rect);
+        last_button_states[4] = false;
+    }
+
+    wait_time = crate::settings::get_cloned_settings()
+        .max_wait_time
+        .to_string();
+
+    scale = match wait_time.len() {
+        1 => 0.25,
+        2 => 0.50,
+        3 => 0.75,
+        _ => 1.0,
+    };
+
+    full_w = button2_rect.width() as f32;
+    scaled_w = full_w * scale;
+
+    x = button2_rect.x + ((full_w - scaled_w) / 2.0) as i32;
+
+    draw_text(
+        canvas,
+        texture_creator,
+        font,
+        &wait_time,
+        Rect::new(x, button2_rect.y, scaled_w as u32, button2_rect.height()),
+    );
+}
+
 fn present_buttons(
     canvas: &mut Canvas<Window>,
     textures: &mut HashMap<String, Texture>,
-    last_button_states: &mut [bool; 3],
+    last_button_states: &mut [bool; 5],
     play: &mut bool,
     audio_device: &mut Option<crate::player::AudioDeviceType>,
     mouse_x: i32,
@@ -177,7 +288,7 @@ fn present_buttons(
             if last_button_states[0] {
                 let _ = crate::controller::play_button(play);
             }
-            last_button_states[1] = false;
+            last_button_states[0] = false;
         }
     } else {
         let _ = canvas.copy(
@@ -263,6 +374,25 @@ fn present_buttons(
     let _ = canvas.copy(&textures.get("folder").unwrap(), None, button3_rect);
 
     canvas.present();
+}
+
+#[inline]
+fn draw_text(
+    canvas: &mut Canvas<Window>,
+    texture_creator: &sdl2::render::TextureCreator<WindowContext>,
+    font: &mut sdl2::ttf::Font,
+    text: &str,
+    rect: Rect,
+) {
+    let surface = font
+        .render(text)
+        .blended(Color::RGBA(255, 255, 255, 255))
+        .map_err(|e| e.to_string());
+    let texture = texture_creator
+        .create_texture_from_surface(&surface.unwrap())
+        .map_err(|e| e.to_string());
+
+    let _ = canvas.copy(&mut texture.as_ref().unwrap(), None, rect);
 }
 
 #[inline]

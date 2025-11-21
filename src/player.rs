@@ -5,10 +5,9 @@ use sdl2::audio::{AudioCallback, AudioDevice, AudioSpecDesired, AudioSpecWAV};
 use crate::dir;
 
 use rand::prelude::*;
-use std::ops::DerefMut;
 use std::path;
 use std::path::PathBuf;
-use std::sync::{Mutex, MutexGuard};
+use std::sync::Mutex;
 use std::time::{SystemTime, UNIX_EPOCH};
 use std::vec::Vec;
 
@@ -137,7 +136,12 @@ pub fn update(
         if *chosen_wait == 0.0 {
             let min = settings.min_wait_time;
             let max = settings.max_wait_time;
-            let rand_time = rand::rng().random_range(min..max);
+            let rand_time;
+            if max < min {
+                rand_time = 0.0;
+            } else {
+                rand_time = rand::rng().random_range(min..max);
+            }
 
             *chosen_wait = now + rand_time;
             return;
@@ -192,7 +196,12 @@ pub fn stop_audio(
 
     let min = settings.min_wait_time;
     let max = settings.max_wait_time;
-    let rand_time = rand::rng().random_range(min..max);
+    let rand_time;
+    if max < min {
+        rand_time = 0.0;
+    } else {
+        rand_time = rand::rng().random_range(min..max);
+    }
 
     *CHOSEN_WAIT.lock().unwrap() = now + rand_time;
 }
