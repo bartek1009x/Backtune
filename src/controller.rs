@@ -2,16 +2,20 @@ use std::io::Error;
 use std::process::Command;
 use std::time::{SystemTime, UNIX_EPOCH};
 
-pub fn play_button(play: &mut bool) -> Result<(), Error> {
+pub fn play_button(
+    audio_device: &mut Option<crate::player::AudioDeviceType>,
+    play: &mut bool,
+) -> Result<(), Error> {
     *play = true;
-    let mut x = None;
     crate::player::stop_audio(
-        &mut x,
+        audio_device,
         &crate::settings::get_cloned_settings(),
         &SystemTime::now()
             .duration_since(UNIX_EPOCH)
             .expect("Time error")
             .as_secs_f64(),
+        None,
+        None,
     );
     Ok(())
 }
@@ -29,7 +33,13 @@ pub fn stop_button(
 
     match audio_device {
         Some(_) => {
-            crate::player::stop_audio(audio_device, &crate::settings::get_cloned_settings(), &now);
+            crate::player::stop_audio(
+                audio_device,
+                &crate::settings::get_cloned_settings(),
+                &now,
+                None,
+                None,
+            );
         }
         None => {}
     }
@@ -49,5 +59,10 @@ pub fn folder_button() -> Result<(), Error> {
         eprintln!("Unsupported OS");
     }
 
+    Ok(())
+}
+
+pub fn reload_button(loaded_audio_paths: &mut Vec<std::path::PathBuf>) -> Result<(), Error> {
+    *loaded_audio_paths = crate::dir::load_audio_paths();
     Ok(())
 }

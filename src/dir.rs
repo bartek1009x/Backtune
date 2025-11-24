@@ -37,7 +37,8 @@ pub fn get_settings() -> path::PathBuf {
     return base_dirs.data_dir().join(APP_NAME).join("settings.json");
 }
 
-pub fn load_audio_paths(loaded_audio_paths: &mut Vec<path::PathBuf>) {
+pub fn load_audio_paths() -> Vec<path::PathBuf> {
+    let mut loaded_audio_paths: Vec<path::PathBuf> = Vec::new();
     for entry in fs::read_dir(get_sounds_dir()).expect("Could not read directory") {
         match entry {
             Ok(entry) => {
@@ -50,4 +51,5 @@ pub fn load_audio_paths(loaded_audio_paths: &mut Vec<path::PathBuf>) {
             }
         }
     }
+    loaded_audio_paths
 }

@@ -1,6 +1,6 @@
 extern crate sdl2;
 
-use sdl2::audio::{AudioCallback, AudioDevice, AudioSpecDesired, AudioSpecWAV};
+use sdl2::audio::{AudioDevice, AudioSpecDesired, AudioSpecWAV};
 
 use crate::dir;
 
@@ -28,104 +28,29 @@ pub enum AudioFormat {
     I32,
 }
 
-// For u8 audio
-pub struct U8AudioCallback {
-    pub bytes: Vec<u8>,
-    pub position: usize,
-}
-
-impl AudioCallback for U8AudioCallback {
-    type Channel = u8;
-
-    fn callback(&mut self, data: &mut [u8]) {
-        let remaining = self.bytes.len().saturating_sub(self.position);
-        let to_copy = data.len().min(remaining);
-
-        if to_copy > 0 {
-            data[..to_copy].copy_from_slice(&self.bytes[self.position..self.position + to_copy]);
-            self.position += to_copy;
-        }
-
-        if to_copy < data.len() {
-            data[to_copy..].fill(128);
-        }
-    }
-}
-
-// For i16 audio
-pub struct I16AudioCallback {
-    pub samples: Vec<i16>,
-    pub position: usize,
-}
-
-impl AudioCallback for I16AudioCallback {
-    type Channel = i16;
-
-    fn callback(&mut self, data: &mut [i16]) {
-        let remaining = self.samples.len().saturating_sub(self.position);
-        let to_copy = data.len().min(remaining);
-
-        if to_copy > 0 {
-            data[..to_copy].copy_from_slice(&self.samples[self.position..self.position + to_copy]);
-            self.position += to_copy;
-        }
-
-        if to_copy < data.len() {
-            data[to_copy..].fill(0);
-        }
-    }
-}
-
-// For i32 audio
-pub struct I32AudioCallback {
-    pub samples: Vec<i32>,
-    pub position: usize,
-}
-
-impl AudioCallback for I32AudioCallback {
-    type Channel = i32;
-
-    fn callback(&mut self, data: &mut [i32]) {
-        let remaining = self.samples.len().saturating_sub(self.position);
-        let to_copy = data.len().min(remaining);
-
-        if to_copy > 0 {
-            data[..to_copy].copy_from_slice(&self.samples[self.position..self.position + to_copy]);
-            self.position += to_copy;
-        }
-
-        if to_copy < data.len() {
-            data[to_copy..].fill(0);
-        }
-    }
-}
-
 static CURRENTLY_PLAYING: Mutex<bool> = Mutex::new(false);
 static CURRENTLY_PLAYING_INDEX: Mutex<usize> = Mutex::new(0);
 static STARTED_AT: Mutex<f64> = Mutex::new(0.0);
 static CHOSEN_WAIT: Mutex<f64> = Mutex::new(0.0);
 
-pub fn init(loaded_audio_paths: &mut Vec<path::PathBuf>) {
-    dir::load_audio_paths(loaded_audio_paths);
-}
-
 pub enum AudioDeviceType {
-    U8(AudioDevice<U8AudioCallback>),
-    I16(AudioDevice<I16AudioCallback>),
-    I32(AudioDevice<I32AudioCallback>),
+    U8(AudioDevice<crate::audio_callbacks::U8AudioCallback>),
+    I16(AudioDevice<crate::audio_callbacks::I16AudioCallback>),
+    I32(AudioDevice<crate::audio_callbacks::I32AudioCallback>),
 }
 
 pub fn update(
     audio_system: &sdl2::AudioSubsystem,
     loaded_audio_paths: &Vec<path::PathBuf>,
     audio_device: &mut Option<AudioDeviceType>,
-    settings: &crate::settings::Settings,
     loaded_audio: &mut Option<CopiedData>,
 ) {
     let mut currently_playing = CURRENTLY_PLAYING.lock().unwrap();
     let mut chosen_wait = CHOSEN_WAIT.lock().unwrap();
     let mut started_at = STARTED_AT.lock().unwrap();
     let mut current_index = CURRENTLY_PLAYING_INDEX.lock().unwrap();
+
+    let settings = crate::settings::get_cloned_settings();
 
     let now = SystemTime::now()
         .duration_since(UNIX_EPOCH)
@@ -137,7 +62,7 @@ pub fn update(
             let min = settings.min_wait_time;
             let max = settings.max_wait_time;
             let rand_time;
-            if max < min {
+            if max <= min {
                 rand_time = 0.0;
             } else {
                 rand_time = rand::rng().random_range(min..max);
@@ -167,10 +92,16 @@ pub fn update(
                 let finish_time = *started_at + existing_audio.length;
 
                 if now >= finish_time {
-                    stop_audio(audio_device, settings, &now);
+                    stop_audio(
+                        audio_device,
+                        &settings,
+                        &now,
+                        Some(&mut currently_playing),
+                        Some(&mut chosen_wait),
+                    );
                 }
             }
-            None => {
+            _ => {
                 println!("Error playing the audio: not loaded properly");
             }
         }
@@ -181,6 +112,8 @@ pub fn stop_audio(
     audio_device: &mut Option<AudioDeviceType>,
     settings: &crate::settings::Settings,
     now: &f64,
+    currently_playing: Option<&mut bool>,
+    chosen_wait: Option<&mut f64>,
 ) {
     if let Some(dev) = audio_device {
         match dev {
@@ -192,18 +125,32 @@ pub fn stop_audio(
 
     *audio_device = None;
 
-    *CURRENTLY_PLAYING.lock().unwrap() = false;
+    match currently_playing {
+        Some(currently_playing) => {
+            *currently_playing = false;
+        }
+        None => {
+            *CURRENTLY_PLAYING.lock().unwrap() = false;
+        }
+    }
 
     let min = settings.min_wait_time;
     let max = settings.max_wait_time;
     let rand_time;
-    if max < min {
+    if max <= min {
         rand_time = 0.0;
     } else {
         rand_time = rand::rng().random_range(min..max);
     }
 
-    *CHOSEN_WAIT.lock().unwrap() = now + rand_time;
+    match chosen_wait {
+        Some(chosen_wait) => {
+            *chosen_wait = now + rand_time;
+        }
+        None => {
+            *CHOSEN_WAIT.lock().unwrap() = now + rand_time;
+        }
+    }
 }
 
 fn play_random_audio(
@@ -231,7 +178,7 @@ fn play_random_audio(
 
                 match existing_audio.format {
                     AudioFormat::U8 => {
-                        let callback = U8AudioCallback {
+                        let callback = crate::audio_callbacks::U8AudioCallback {
                             bytes: existing_audio.bytes.clone(),
                             position: 0,
                         };
@@ -250,7 +197,7 @@ fn play_random_audio(
                             .map(|chunk| i16::from_le_bytes([chunk[0], chunk[1]]))
                             .collect();
 
-                        let callback = I16AudioCallback {
+                        let callback = crate::audio_callbacks::I16AudioCallback {
                             samples,
                             position: 0,
                         };
@@ -271,7 +218,7 @@ fn play_random_audio(
                             })
                             .collect();
 
-                        let callback = I32AudioCallback {
+                        let callback = crate::audio_callbacks::I32AudioCallback {
                             samples,
                             position: 0,
                         };
@@ -293,7 +240,7 @@ fn play_random_audio(
                 *currently_playing = true;
                 *currently_playing_index = random_i;
             }
-            None => {
+            _ => {
                 println!("Error playing the audio: not loaded properly")
             }
         }

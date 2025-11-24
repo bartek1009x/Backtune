@@ -1,14 +1,15 @@
 extern crate sdl2;
 
 use sdl2::event::{Event, WindowEvent};
+use sdl2::keyboard::Keycode;
 use sdl2::mouse::MouseButton;
 use sdl2::render::Texture;
-use sdl2::ttf::Font;
 
 use std::collections::HashMap;
 use std::path;
 use std::time::Duration;
 
+mod audio_callbacks;
 mod controller;
 mod dir;
 mod player;
@@ -40,14 +41,13 @@ fn main() {
     let mut loaded_audio: Option<player::CopiedData> = None;
 
     settings::load_settings();
-    let ref_settings = settings::get_cloned_settings();
-    player::init(&mut loaded_audio_paths);
+    loaded_audio_paths = dir::load_audio_paths();
 
     let mut canvas = window.into_canvas().build().unwrap();
     let texture_creator = canvas.texture_creator();
     let ttf_context = sdl2::ttf::init().unwrap();
     let mut textures: HashMap<String, Texture> = HashMap::new();
-    let mut font: Option<Font> = None;
+    let mut font: Option<sdl2::ttf::Font> = None;
     renderer::init(
         &mut canvas,
         &texture_creator,
@@ -56,13 +56,18 @@ fn main() {
         &mut font,
     );
 
-    let mut last_button_states = [false; 5];
+    let mut last_button_states = [false; 6];
+    let mut capture_text = -1;
+    let mut captured_text = String::new();
     let mut window_focused = true;
 
     'running: loop {
         for event in event_pump.poll_iter() {
             match event {
-                Event::Quit { .. } => break 'running,
+                Event::Quit { .. } => {
+                    settings::save_settings();
+                    break 'running;
+                }
                 Event::Window {
                     timestamp: _,
                     window_id: _,
@@ -72,6 +77,33 @@ fn main() {
                         window_focused = true;
                     } else if win_event == WindowEvent::FocusLost {
                         window_focused = false;
+                    }
+                }
+                Event::KeyDown {
+                    timestamp: _,
+                    window_id: _,
+                    keycode,
+                    scancode: _,
+                    keymod: _,
+                    repeat: _,
+                } => {
+                    if capture_text != -1 {
+                        if keycode == Some(Keycode::ESCAPE) || keycode == Some(Keycode::RETURN) {
+                            settings::set_setting(capture_text, &captured_text);
+                            capture_text = -1;
+                        } else if keycode == Some(Keycode::BACKSPACE) {
+                            if captured_text.len() > 0 {
+                                captured_text.pop();
+                            }
+                        } else {
+                            let char = get_input_char(keycode, &captured_text);
+                            match char {
+                                Some(char) => {
+                                    captured_text.push(char);
+                                }
+                                _ => {}
+                            }
+                        }
                     }
                 }
                 _ => {}
@@ -89,9 +121,12 @@ fn main() {
                 &mut last_button_states,
                 &mut play,
                 &mut audio_device,
+                &mut loaded_audio_paths,
                 mouse_state.x(),
                 mouse_state.y(),
                 mouse_state.is_mouse_button_pressed(MouseButton::Left),
+                &mut capture_text,
+                &mut captured_text,
             );
         }
 
@@ -100,11 +135,27 @@ fn main() {
                 &audio_system,
                 &loaded_audio_paths,
                 &mut audio_device,
-                &ref_settings,
                 &mut loaded_audio,
             );
         }
 
         ::std::thread::sleep(THREAD_SLEEP_TIME);
     }
+}
+
+fn get_input_char(keycode: Option<Keycode>, captured_text: &String) -> Option<char> {
+    return match keycode {
+        Some(Keycode::NUM_0) => Some('0'),
+        Some(Keycode::NUM_1) => Some('1'),
+        Some(Keycode::NUM_2) => Some('2'),
+        Some(Keycode::NUM_3) => Some('3'),
+        Some(Keycode::NUM_4) => Some('4'),
+        Some(Keycode::NUM_5) => Some('5'),
+        Some(Keycode::NUM_6) => Some('6'),
+        Some(Keycode::NUM_7) => Some('7'),
+        Some(Keycode::NUM_8) => Some('8'),
+        Some(Keycode::NUM_9) => Some('9'),
+        Some(Keycode::PERIOD) if captured_text.find('.') == None => Some('.'),
+        _ => None,
+    };
 }
