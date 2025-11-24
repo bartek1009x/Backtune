@@ -13,7 +13,7 @@ Run the app, then click the button with a folder icon. This will open the sounds
 ### All of the sounds have to be in the `.wav` format.
 
 # Planned features:
-- UI for in-app configuration, 🟨
+- UI for in-app configuration, ✅
 - Configurable volume,
 - Configurable fade in/out for the sounds,
 - Run audio playing as a separate background process that doesn't require the app window,
