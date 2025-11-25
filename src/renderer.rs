@@ -1,4 +1,5 @@
 use sdl2::image::{InitFlag, LoadTexture};
+use sdl2::mouse::MouseState;
 use sdl2::pixels::Color;
 use sdl2::rect::Rect;
 use sdl2::render::Canvas;
@@ -69,9 +70,7 @@ pub fn update(
     play: &mut bool,
     audio_device: &mut Option<crate::player::AudioDeviceType>,
     loaded_audio_paths: &mut Vec<std::path::PathBuf>,
-    mouse_x: i32,
-    mouse_y: i32,
-    mouse_down: bool,
+    mouse_state: MouseState,
     capture_text: &mut i32,
     captured_text: &mut String,
 ) {
@@ -93,9 +92,7 @@ pub fn update(
                 textures,
                 existing_font,
                 last_button_states,
-                mouse_x,
-                mouse_y,
-                mouse_down,
+                mouse_state,
                 capture_text,
                 captured_text,
             );
@@ -110,9 +107,7 @@ pub fn update(
         play,
         audio_device,
         loaded_audio_paths,
-        mouse_x,
-        mouse_y,
-        mouse_down,
+        mouse_state,
     );
 }
 
@@ -128,9 +123,7 @@ fn present_settings(
     textures: &mut HashMap<String, Texture>,
     font: &mut sdl2::ttf::Font,
     last_button_states: &mut [bool; 7],
-    mouse_x: i32,
-    mouse_y: i32,
-    mouse_pressed: bool,
+    mouse_state: MouseState,
     capture_text: &mut i32,
     captured_text: &mut String,
 ) {
@@ -158,14 +151,16 @@ fn present_settings(
         Rect::new(200, 380, 350, 50),
     );
 
+    let mouse_pressed = mouse_state.is_mouse_button_pressed(sdl2::mouse::MouseButton::Left);
+
     let button1_rect = Rect::new(660, 250, 100, 50);
     let button2_rect = Rect::new(660, 315, 100, 50);
     let button3_rect = Rect::new(660, 380, 100, 50);
 
     // BUTTON 1
     let hovered1 = is_mouse_over_button(
-        mouse_x,
-        mouse_y,
+        mouse_state.x(),
+        mouse_state.y(),
         button1_rect.x(),
         button1_rect.x() + button1_rect.width() as i32,
         button1_rect.y(),
@@ -230,8 +225,8 @@ fn present_settings(
 
     // BUTTON 2
     let hovered2 = is_mouse_over_button(
-        mouse_x,
-        mouse_y,
+        mouse_state.x(),
+        mouse_state.y(),
         button2_rect.x(),
         button2_rect.x() + button2_rect.width() as i32,
         button2_rect.y(),
@@ -298,8 +293,8 @@ fn present_settings(
 
     // BUTTON 3
     let hovered3 = is_mouse_over_button(
-        mouse_x,
-        mouse_y,
+        mouse_state.x(),
+        mouse_state.y(),
         button3_rect.x(),
         button3_rect.x() + button3_rect.width() as i32,
         button3_rect.y(),
@@ -372,10 +367,10 @@ fn present_buttons(
     play: &mut bool,
     audio_device: &mut Option<crate::player::AudioDeviceType>,
     loaded_audio_paths: &mut Vec<std::path::PathBuf>,
-    mouse_x: i32,
-    mouse_y: i32,
-    mouse_pressed: bool,
+    mouse_state: MouseState,
 ) {
+    let mouse_pressed = mouse_state.is_mouse_button_pressed(sdl2::mouse::MouseButton::Left);
+
     let button1_rect = Rect::new(960 / 2 - 215, 100, 100, 100);
     let button2_rect = Rect::new(960 / 2 - 105, 100, 100, 100);
     let button3_rect = Rect::new(960 / 2 + 5, 100, 100, 100);
@@ -383,8 +378,8 @@ fn present_buttons(
 
     // BUTTON 1
     let hovered1 = is_mouse_over_button(
-        mouse_x,
-        mouse_y,
+        mouse_state.x(),
+        mouse_state.y(),
         button1_rect.x(),
         button1_rect.x() + button1_rect.width() as i32,
         button1_rect.y(),
@@ -419,8 +414,8 @@ fn present_buttons(
 
     // BUTTON 2
     let hovered2 = is_mouse_over_button(
-        mouse_x,
-        mouse_y,
+        mouse_state.x(),
+        mouse_state.y(),
         button2_rect.x(),
         button2_rect.x() + button2_rect.width() as i32,
         button2_rect.y(),
@@ -455,8 +450,8 @@ fn present_buttons(
 
     // BUTTON 3
     let hovered3 = is_mouse_over_button(
-        mouse_x,
-        mouse_y,
+        mouse_state.x(),
+        mouse_state.y(),
         button3_rect.x(),
         button3_rect.x() + button3_rect.width() as i32,
         button3_rect.y(),
@@ -492,8 +487,8 @@ fn present_buttons(
 
     // BUTTON 4
     let hovered4 = is_mouse_over_button(
-        mouse_x,
-        mouse_y,
+        mouse_state.x(),
+        mouse_state.y(),
         button4_rect.x(),
         button4_rect.x() + button4_rect.width() as i32,
         button4_rect.y(),

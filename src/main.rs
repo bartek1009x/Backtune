@@ -2,7 +2,6 @@ extern crate sdl2;
 
 use sdl2::event::{Event, WindowEvent};
 use sdl2::keyboard::Keycode;
-use sdl2::mouse::MouseButton;
 use sdl2::render::Texture;
 
 use std::collections::HashMap;
@@ -122,9 +121,7 @@ fn main() {
                 &mut play,
                 &mut audio_device,
                 &mut loaded_audio_paths,
-                mouse_state.x(),
-                mouse_state.y(),
-                mouse_state.is_mouse_button_pressed(MouseButton::Left),
+                mouse_state,
                 &mut capture_text,
                 &mut captured_text,
             );
