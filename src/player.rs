@@ -2,8 +2,6 @@ extern crate sdl2;
 
 use sdl2::audio::{AudioDevice, AudioSpecDesired, AudioSpecWAV};
 
-use crate::dir;
-
 use rand::prelude::*;
 use std::path;
 use std::path::PathBuf;
@@ -129,7 +127,7 @@ pub fn stop_audio(
         Some(currently_playing) => {
             *currently_playing = false;
         }
-        None => {
+        _ => {
             *CURRENTLY_PLAYING.lock().unwrap() = false;
         }
     }
@@ -147,7 +145,7 @@ pub fn stop_audio(
         Some(chosen_wait) => {
             *chosen_wait = now + rand_time;
         }
-        None => {
+        _ => {
             *CHOSEN_WAIT.lock().unwrap() = now + rand_time;
         }
     }

@@ -37,7 +37,7 @@ fn main() {
     let sdl_context = sdl2::init().unwrap();
     let audio_system = sdl_context.audio().unwrap();
     let mut audio_device: Option<player::AudioDeviceType> = None;
-    let mut loaded_audio_paths: Vec<path::PathBuf> = Vec::new();
+    let mut loaded_audio_paths: Vec<path::PathBuf>;
     let mut loaded_audio: Option<player::CopiedData> = None;
 
     settings::load_settings();
@@ -56,7 +56,7 @@ fn main() {
         &mut font,
     );
 
-    let mut last_button_states = [false; 6];
+    let mut last_button_states = [false; 7];
     let mut capture_text = -1;
     let mut captured_text = String::new();
     let mut window_focused = true;
@@ -96,7 +96,7 @@ fn main() {
                                 captured_text.pop();
                             }
                         } else {
-                            let char = get_input_char(keycode, &captured_text);
+                            let char = controller::get_input_char(keycode, &captured_text);
                             match char {
                                 Some(char) => {
                                     captured_text.push(char);
@@ -141,21 +141,4 @@ fn main() {
 
         ::std::thread::sleep(THREAD_SLEEP_TIME);
     }
-}
-
-fn get_input_char(keycode: Option<Keycode>, captured_text: &String) -> Option<char> {
-    return match keycode {
-        Some(Keycode::NUM_0) => Some('0'),
-        Some(Keycode::NUM_1) => Some('1'),
-        Some(Keycode::NUM_2) => Some('2'),
-        Some(Keycode::NUM_3) => Some('3'),
-        Some(Keycode::NUM_4) => Some('4'),
-        Some(Keycode::NUM_5) => Some('5'),
-        Some(Keycode::NUM_6) => Some('6'),
-        Some(Keycode::NUM_7) => Some('7'),
-        Some(Keycode::NUM_8) => Some('8'),
-        Some(Keycode::NUM_9) => Some('9'),
-        Some(Keycode::PERIOD) if captured_text.find('.') == None => Some('.'),
-        _ => None,
-    };
 }

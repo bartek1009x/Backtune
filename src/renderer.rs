@@ -54,8 +54,7 @@ pub fn init<'a>(
                 textures.insert(texture_name.to_string(), texture);
             }
             Err(err) => {
-                println!("Error loading texture {}: {}", texture_name, err);
-                return;
+                panic!("Error loading texture {}: {}", texture_name, err);
             }
         }
     }
@@ -66,7 +65,7 @@ pub fn update(
     texture_creator: &sdl2::render::TextureCreator<WindowContext>,
     textures: &mut HashMap<String, Texture>,
     font: &mut Option<sdl2::ttf::Font>,
-    last_button_states: &mut [bool; 6],
+    last_button_states: &mut [bool; 7],
     play: &mut bool,
     audio_device: &mut Option<crate::player::AudioDeviceType>,
     loaded_audio_paths: &mut Vec<std::path::PathBuf>,
@@ -128,7 +127,7 @@ fn present_settings(
     texture_creator: &sdl2::render::TextureCreator<WindowContext>,
     textures: &mut HashMap<String, Texture>,
     font: &mut sdl2::ttf::Font,
-    last_button_states: &mut [bool; 6],
+    last_button_states: &mut [bool; 7],
     mouse_x: i32,
     mouse_y: i32,
     mouse_pressed: bool,
@@ -139,8 +138,16 @@ fn present_settings(
         canvas,
         texture_creator,
         font,
+        "Volume",
+        Rect::new(200, 250, 150, 50),
+    );
+
+    draw_text(
+        canvas,
+        texture_creator,
+        font,
         "Minimum wait time",
-        Rect::new(200, 250, 350, 50),
+        Rect::new(200, 315, 350, 50),
     );
 
     draw_text(
@@ -148,11 +155,12 @@ fn present_settings(
         texture_creator,
         font,
         "Maximum wait time",
-        Rect::new(200, 315, 350, 50),
+        Rect::new(200, 380, 350, 50),
     );
 
     let button1_rect = Rect::new(660, 250, 100, 50);
     let button2_rect = Rect::new(660, 315, 100, 50);
+    let button3_rect = Rect::new(660, 380, 100, 50);
 
     // BUTTON 1
     let hovered1 = is_mouse_over_button(
@@ -195,14 +203,12 @@ fn present_settings(
         *capture_text = -1;
     }
 
-    let mut wait_time = &crate::settings::get_cloned_settings()
-        .min_wait_time
-        .to_string();
+    let mut setting_value_text = &crate::settings::get_cloned_settings().volume.to_string();
     if *capture_text == 0 {
-        wait_time = captured_text;
+        setting_value_text = captured_text;
     }
 
-    let mut scale = match wait_time.len() {
+    let mut scale = match setting_value_text.len() {
         1 => 0.25,
         2 => 0.50,
         3 => 0.75,
@@ -218,7 +224,7 @@ fn present_settings(
         canvas,
         texture_creator,
         font,
-        &wait_time,
+        &setting_value_text,
         Rect::new(x, button1_rect.y, scaled_w as u32, button1_rect.height()),
     );
 
@@ -263,14 +269,14 @@ fn present_settings(
         *capture_text = -1;
     }
 
-    let mut wait_time = &crate::settings::get_cloned_settings()
-        .max_wait_time
+    let mut setting_value_text = &crate::settings::get_cloned_settings()
+        .min_wait_time
         .to_string();
     if *capture_text == 1 {
-        wait_time = captured_text;
+        setting_value_text = captured_text;
     }
 
-    scale = match wait_time.len() {
+    scale = match setting_value_text.len() {
         1 => 0.25,
         2 => 0.50,
         3 => 0.75,
@@ -286,15 +292,83 @@ fn present_settings(
         canvas,
         texture_creator,
         font,
-        &wait_time,
+        &setting_value_text,
         Rect::new(x, button2_rect.y, scaled_w as u32, button2_rect.height()),
+    );
+
+    // BUTTON 3
+    let hovered3 = is_mouse_over_button(
+        mouse_x,
+        mouse_y,
+        button3_rect.x(),
+        button3_rect.x() + button3_rect.width() as i32,
+        button3_rect.y(),
+        button3_rect.y() + button3_rect.height() as i32,
+    );
+
+    if hovered3 {
+        if mouse_pressed {
+            let _ = canvas.copy(&textures.get("value_active").unwrap(), None, button3_rect);
+
+            last_button_states[6] = true;
+        } else {
+            if *capture_text == 2 {
+                let _ = canvas.copy(&textures.get("value_active").unwrap(), None, button3_rect);
+            } else {
+                let _ = canvas.copy(&textures.get("value_hover").unwrap(), None, button3_rect);
+            }
+            if last_button_states[6] {
+                *capture_text = 2;
+                captured_text.clear();
+            }
+            last_button_states[6] = false;
+        }
+    } else {
+        if *capture_text == 2 {
+            let _ = canvas.copy(&textures.get("value_active").unwrap(), None, button3_rect);
+        } else {
+            let _ = canvas.copy(&textures.get("value_inactive").unwrap(), None, button3_rect);
+        }
+        last_button_states[6] = false;
+    }
+
+    if mouse_pressed && !hovered3 && *capture_text != -1 {
+        crate::settings::set_setting(*capture_text, &captured_text);
+        *capture_text = -1;
+    }
+
+    let mut setting_value_text = &crate::settings::get_cloned_settings()
+        .max_wait_time
+        .to_string();
+    if *capture_text == 2 {
+        setting_value_text = captured_text;
+    }
+
+    scale = match setting_value_text.len() {
+        1 => 0.25,
+        2 => 0.50,
+        3 => 0.75,
+        _ => 1.0,
+    };
+
+    full_w = button3_rect.width() as f32;
+    scaled_w = full_w * scale;
+
+    x = button3_rect.x + ((full_w - scaled_w) / 2.0) as i32;
+
+    draw_text(
+        canvas,
+        texture_creator,
+        font,
+        &setting_value_text,
+        Rect::new(x, button3_rect.y, scaled_w as u32, button3_rect.height()),
     );
 }
 
 fn present_buttons(
     canvas: &mut Canvas<Window>,
     textures: &mut HashMap<String, Texture>,
-    last_button_states: &mut [bool; 6],
+    last_button_states: &mut [bool; 7],
     play: &mut bool,
     audio_device: &mut Option<crate::player::AudioDeviceType>,
     loaded_audio_paths: &mut Vec<std::path::PathBuf>,

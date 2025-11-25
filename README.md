@@ -14,7 +14,9 @@ Run the app, then click the button with a folder icon. This will open the sounds
 
 # Planned features:
 - UI for in-app configuration, ✅
-- Configurable volume,
+- Configurable volume, ✅
 - Configurable fade in/out for the sounds,
 - Run audio playing as a separate background process that doesn't require the app window,
+- Support more audio file formats (mp3, ogg, flac),
+- Better settings fallback in case of errors - instead of completely overriding old settings.json, try to retrieve old setting values,
 - Spotify Desktop Client integration for playing Spotify songs instead of local files **(maybe in the far future)**.
